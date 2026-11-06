@@ -2481,6 +2481,8 @@ wLang:      db                  ; 0 = English, 1 = Spanish (SELECT on the title)
 wCur:       ds EN_SIZE
 ; music
 wMusOn:     db
+wMusDrum:   db                  ; drum pattern 1..4, 0 = none
+wSfxLock:   db                  ; frames left before the drums may use CH4 again
 wMusSpeed:  db
 wMelDuty:   db
 wMelEnv:    db

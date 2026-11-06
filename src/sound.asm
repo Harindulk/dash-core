@@ -1,7 +1,7 @@
 ; ---------------------------------------------------------------
 ; Sound: tiny pattern tracker (CH2 melody, CH3 wave bass)
 ; SFX use CH1 (square+sweep) and CH4 (noise) so they never fight the music.
-; Song format: db speed, duty, envelope
+; Song format: db speed, duty, envelope, drums (index into DrumPats, 0 = none; CH4 noise)
 ;              then entries: dw melodyPattern, bassPattern  (16 steps each)
 ;              dw 0 = loop to first entry, dw 1 = stop
 ; Step bytes: HOLD (0) keep, OFF (1) note off, else note code
@@ -37,6 +37,8 @@ MusicPlay:
     ld [wMelDuty], a
     ld a, [hl+]
     ld [wMelEnv], a
+    ld a, [hl+]
+    ld [wMusDrum], a
     ld a, l
     ld [wMusStart], a
     ld [wMusOrd], a
@@ -108,6 +110,18 @@ MusLoadEntry:
 
 ; called from the VBlank handler
 MusicTick:
+    ld a, [wSfxLock]            ; CH4 belongs to an effect for a few frames
+    and a
+    jr z, .unlocked
+    dec a
+    ld [wSfxLock], a
+    jr nz, .unlocked
+    ld a, [wPaused]             ; effect over: re-centre the pan (pause keeps everything muted)
+    and a
+    jr nz, .unlocked
+    ld a, $FF
+    ldh [rNR51], a
+.unlocked
     ld a, [wMusOn]
     and a
     ret z
@@ -136,6 +150,7 @@ MusicTick:
     ld h, a
     ld a, [hl]
     call PlayBass
+    call PlayDrum
     ld a, [wMusRow]
     inc a
     and 15
@@ -209,6 +224,44 @@ NoteFreq:
     ret
 
 ; ---------------- sound effects ----------------
+PlayDrum:
+    ld a, [wSfxLock]
+    and a
+    ret nz
+    ld a, [wMusDrum]
+    and a
+    ret z
+    dec a
+    swap a                      ; 16 steps per pattern
+    ld c, a
+    ld a, [wMusRow]
+    add c
+    add LOW(DrumPats)
+    ld l, a
+    ld a, 0
+    adc HIGH(DrumPats)
+    ld h, a
+    ld a, [hl]
+    and a
+    ret z
+    dec a
+    add a
+    add LOW(DrumKit)
+    ld l, a
+    ld a, 0
+    adc HIGH(DrumKit)
+    ld h, a
+    ld a, [hl+]
+    ldh [rNR42], a
+    ld a, [hl]
+    ldh [rNR43], a
+    ld a, $80
+    ldh [rNR44], a
+    ret
+
+; NR42 envelope, NR43 noise: kick (low, punchy), snare (mid crack), hat (high tick)
+DrumKit: db $B1, $71,  $A2, $52,  $51, $10
+
 ; a = x position (0..160) -> NR51: SFX channels (1, 4) pan with the event; music (2, 3) stays centred
 SetPan:
     cp 56
@@ -242,6 +295,10 @@ Ch1Shot:
 
 ; a = NR42 envelope, b = NR43 noise
 NoiseShot:
+    push af
+    ld a, 12
+    ld [wSfxLock], a
+    pop af
     ldh [rNR42], a
     ld a, b
     ldh [rNR43], a
@@ -348,18 +405,18 @@ WaveData:                       ; triangle
     db $01,$23,$45,$67,$89,$AB,$CD,$EF,$FE,$DC,$BA,$98,$76,$54,$32,$10
 
 SongGame:
-    db 7, $80, $A3
+    db 7, $80, $A3, 1
     dw M1, BAm, M2, BF, M3, BG, M4, BE
     dw M5, BAm, M6, BF, M7, BG, M8, BE
     dw 0, 0
 
 SongTitle:
-    db 9, $40, $73
+    db 9, $40, $73, 3
     dw TA1, TBA, TA2, TBF, TA3, TBG, TA4, TBE
     dw 0, 0
 
 SongOver:
-    db 8, $80, $C5
+    db 8, $80, $C5, 0
     dw JG, JB
     dw 1, 1
 
@@ -390,12 +447,12 @@ JG: db E5,HOLD,D5,HOLD, C5,HOLD,B4,HOLD, A4,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
 JB: db A3,HOLD,HOLD,OFF, G3,HOLD,HOLD,OFF, A3,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
 
 SongBoss:
-    db 6, $80, $93
+    db 6, $80, $93, 2
     dw X1, BE, X2, BE, X3, BAm, X4, BE
     dw 0, 0
 
 SongWin:
-    db 6, $80, $A2
+    db 6, $80, $A2, 4
     dw W1, WB, W2, WB2
     dw 1, 1
 
@@ -407,3 +464,13 @@ W1: db E5,HOLD,Gs5,HOLD, B5,HOLD,E6,HOLD, HOLD,HOLD,HOLD,HOLD, OFF,OFF,OFF,OFF
 W2: db E6,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, OFF,OFF,OFF,OFF
 WB:  db E3,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, B3,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
 WB2: db E3,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, E4,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
+
+; drum patterns, 16 steps: 0 rest, 1 kick, 2 snare, 3 hat
+DEF DR_K EQU 1
+DEF DR_S EQU 2
+DEF DR_H EQU 3
+DrumPats:
+    db DR_K,0,DR_H,0, DR_S,0,DR_H,0, DR_K,0,DR_K,DR_H, DR_S,0,DR_H,0      ; 1 game
+    db DR_K,DR_H,DR_K,DR_H, DR_S,DR_H,DR_K,DR_H, DR_K,DR_H,DR_K,DR_H, DR_S,DR_H,DR_S,DR_S      ; 2 boss
+    db DR_K,0,0,0, DR_H,0,0,0, DR_S,0,0,0, DR_H,0,0,0      ; 3 title
+    db DR_K,0,0,0, DR_K,0,0,0, DR_S,0,DR_S,0, DR_S,DR_S,DR_S,DR_S      ; 4 win fanfare
