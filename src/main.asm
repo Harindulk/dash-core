@@ -874,9 +874,13 @@ TitleSprites:
     jr z, .t
     inc d
 .t  ld e, 0
-    ld c, 16
+    ld a, [wSCX]                ; PutSprite follows the BG scroll (for shake); the title's
+    add 16                      ; parallax also drives wSCX, so cancel it here
+    ld c, a
     call PutSprite
-    ld c, 136
+    ld a, c
+    add 120
+    ld c, a
     call PutSprite
     ret
 
