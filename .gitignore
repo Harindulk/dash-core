@@ -1,0 +1,6 @@
+CLAUDE.md
+notes/
+build/
+.venv/
+__pycache__/
+*.ram
