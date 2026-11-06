@@ -11,7 +11,8 @@ through them, so one kill can feed a longer chain.
 At levels 4, 7 and 10 the Warden drops in: a machine the width of the arena, drawn on the
 background layer. It spits drifters in a line and sweeps a beam across your row. Its
 three nodes open one at a time; dash into an open node to break it, break all three to
-bring it down.
+bring it down. Beating the level-10 Warden secures the core and starts the next loop: back
+to level 1 with faster, denser enemies.
 
 ## Controls
 
