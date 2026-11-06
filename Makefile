@@ -16,3 +16,11 @@ clean:
 	rm -rf build
 
 .PHONY: all test clean
+
+dist: $(ROM)
+	@mkdir -p dist
+	cp $(ROM) dist/DashCore.gb
+	git archive --format=zip --prefix=DashCore-source/ -o dist/DashCore-source.zip HEAD
+	@echo "dist/ ready (source zip is from the last commit)"
+
+.PHONY: dist
