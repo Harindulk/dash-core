@@ -112,7 +112,7 @@ if total > limit:                                                    # trim the 
 print("trailer parts", parts, "frames", sum(b - a for a, b in parts))
 
 shots = {}
-shots["1_title"] = next(f for f in reversed(frames[:title_end]) if np.array(f)[72:80, 32:120].min() < 100)
+shots["1_title"] = next(f for f in reversed(frames[:title_end]) if np.array(f)[64:72, 32:120].min() < 100)
 if "chain" in ev: shots["2_chain"] = frames[ev["chain"] + 2]
 if "break1" in ev: shots["3_warden"] = frames[ev["break1"] + 3]
 elif "boss_enter" in ev: shots["3_warden"] = frames[ev["boss_enter"] + 120]

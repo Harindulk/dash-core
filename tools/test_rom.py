@@ -98,6 +98,16 @@ start_game(pb)
 check(rd(pb, "wAlive") == 1, "game starts, player alive")
 check(rd(pb, "wPX", 1) == 72, "player spawned at centre")
 
+# ---- 1b: SELECT on the title switches the language ----
+pb2 = boot()
+pb2.tick(90)
+pb2.button("select"); pb2.tick(40)
+row12 = [pb2.memory[0x9800 + 12 * 32 + 1 + i] for i in range(4)]
+check(rd(pb2, "wLang") == 1 and row12 == [13, 28, 31, 36], f"SELECT switches the title to Spanish (CRUZ, got {row12})")
+pb2.button("select"); pb2.tick(40)
+check(rd(pb2, "wLang") == 0 and pb2.memory[0x9800 + 12 * 32 + 1] == 14, "SELECT again: back to English (DPAD)")
+pb2.stop(save=False)
+
 # ---- 2: dash kill + chain ----
 wr(pb, "wSpawnT", 255)
 settle(pb, lambda: clear_enemies(pb))

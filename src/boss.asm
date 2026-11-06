@@ -54,16 +54,17 @@ BossMaybeStart:
     ld [wBossBeamT], a
     ld a, BOSS_TOPY
     ld [wTopY], a
-    ld hl, TxtWarden
+    ld a, STR_WARDEN
     call SetBanner
     ld hl, SongBoss
     jp MusicPlay
 
-; hl = 20-char text
+; a = string id of a 20-char banner
 SetBanner:
-    ld a, l
+    call StrLang
+    ld a, e
     ld [wBannerTxt], a
-    ld a, h
+    ld a, d
     ld [wBannerTxt+1], a
     xor a
     ld [wBannerLvl], a
@@ -515,7 +516,7 @@ BossHitTest:
     adc 0
     daa
     ld [hl], a
-    ld hl, TxtWardenDown
+    ld a, STR_WDOWN
     call SetBanner
     ld a, 80
     call SetPan
@@ -633,5 +634,3 @@ BossRows:
     db T_BOSS_HULL, T_BOSS_HULL, T_BOSS_HULL, T_BOSS_EYE, T_BOSS_HULL, T_BOSS_HULL, T_BOSS_HULL
     db T_NODE_CLOSED, T_BOSS_HULL, T_BOSS_HULL, T_NODE_CLOSED, T_BOSS_HULL, T_BOSS_HULL, T_NODE_CLOSED
 
-TxtWarden:     db "   -- WARDEN --     ", STR_END
-TxtWardenDown: db "    WARDEN DOWN!    ", STR_END

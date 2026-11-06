@@ -154,6 +154,26 @@ MACRO PUTS                     ; PRINT dest, string_label
     ld de, \2
     call PrintStr
 ENDM
+MACRO PUTL                     ; PRINT dest, string id (current language)
+    ld a, \2
+    call StrLang
+    ld hl, \1
+    call PrintStr
+ENDM
+
+; string ids (index into StrEN / StrES)
+DEF STR_PRESS   EQU 0
+DEF STR_BEST    EQU 1
+DEF STR_HELP1   EQU 2
+DEF STR_HELP2   EQU 3
+DEF STR_SCORE   EQU 4
+DEF STR_OVER    EQU 5
+DEF STR_NEWBEST EQU 6
+DEF STR_LEVEL   EQU 7
+DEF STR_INTRO   EQU 8
+DEF STR_WARDEN  EQU 9
+DEF STR_WDOWN   EQU 10
+DEF STR_LANG    EQU 11
 
 ; ===============================================================
 SECTION "VBlankVec", ROM0[$40]
@@ -719,13 +739,14 @@ TitleScreen:
     ld hl, _SCRN0 + 5 * 32 + 4
     ld a, T_LOGO + 16
     call DrawBigWord4
-    PUTS _SCRN0 + 9 * 32 + 4, TxtPressStart
-    PUTS _SCRN0 + 11 * 32 + 4, TxtBestLabel
-    ld hl, _SCRN0 + 11 * 32 + 9
+    PUTL _SCRN0 + 8 * 32 + 4, STR_PRESS
+    PUTL _SCRN0 + 10 * 32 + 4, STR_BEST
+    ld hl, _SCRN0 + 10 * 32 + 10
     ld de, wBest
     call PrintBCD6
-    PUTS _SCRN0 + 13 * 32 + 1, TxtHelp1
-    PUTS _SCRN0 + 15 * 32 + 1, TxtHelp2
+    PUTL _SCRN0 + 12 * 32 + 1, STR_HELP1
+    PUTL _SCRN0 + 13 * 32 + 1, STR_HELP2
+    PUTL _SCRN0 + 15 * 32 + 2, STR_LANG
     ld hl, _SCRN1
     ld bc, 32
     xor a
@@ -770,15 +791,26 @@ TitleScreen:
     jr nz, .noBlink
     ld a, [wFrame]
     and 32
-    ld hl, TxtPressStart
+    ld a, STR_PRESS
+    call StrLang
+    ld h, d
+    ld l, e
     jr z, .show
     ld hl, TxtBlank11
 .show
-    ld de, _SCRN0 + 9 * 32 + 4
+    ld de, _SCRN0 + 8 * 32 + 4
     ld a, 11
     call QueueCopy
 .noBlink
     call TitleSprites
+    ld a, [wKeysNew]
+    bit PAD_SEL, a
+    jr z, .noLang
+    ld a, [wLang]
+    xor 1
+    ld [wLang], a
+    jp TitleScreen
+.noLang
     ld a, [wKeysNew]
     bit PAD_START, a
     jr z, .loop
@@ -856,10 +888,10 @@ StartGame:
     ld bc, 32 * 12
     xor a
     call Memset
-    PUTS _SCRN1 + 2 * 32 + 5, TxtGameOver
-    PUTS _SCRN1 + 4 * 32 + 3, TxtScore
-    PUTS _SCRN1 + 6 * 32 + 3, TxtBestLabel
-    PUTS _SCRN1 + 10 * 32 + 4, TxtPressStart
+    PUTL _SCRN1 + 2 * 32 + 3, STR_OVER
+    PUTL _SCRN1 + 4 * 32 + 3, STR_SCORE
+    PUTL _SCRN1 + 6 * 32 + 3, STR_BEST
+    PUTL _SCRN1 + 10 * 32 + 4, STR_PRESS
     ; reset game state
     ld hl, wGameVars
     ld bc, wGameVarsEnd - wGameVars
@@ -909,7 +941,7 @@ StartGame:
     xor a
     ld [wHudDirty], a
     call RenderSprites
-    ld hl, TxtIntro
+    ld a, STR_INTRO
     call SetBanner
     ld a, 150
     ld [wBanner], a
@@ -1618,7 +1650,7 @@ KillEnemy:
     ld a, 3
     ld b, 6
     call StartWave
-    ld hl, TxtLevelBanner
+    ld a, STR_LEVEL
     call SetBanner
     ld a, 1
     ld [wBannerLvl], a
@@ -1943,7 +1975,10 @@ UpdateDeath:
     jr z, .s1
     ld a, [wNewBest]
     and a
-    ld hl, TxtNewBest
+    ld a, STR_NEWBEST
+    call StrLang
+    ld h, d
+    ld l, e
     jr nz, .s2
     ld hl, TxtBlank11
 .s2 ld de, _SCRN1 + 8 * 32 + 4
@@ -2330,17 +2365,52 @@ Times11:
 ;  Text
 ; ===============================================================
 SECTION "Text", ROM0
+; a = id -> de = string in the current language
+StrLang:
+    add a
+    ld e, a
+    ld d, 0
+    ld a, [wLang]
+    and a
+    ld hl, StrEN
+    jr z, .t
+    ld hl, StrES
+.t  add hl, de
+    ld a, [hl+]
+    ld d, [hl]
+    ld e, a
+    ret
+
+StrEN: dw TxtPressStart, TxtBestLabel, TxtHelp1, TxtHelp2, TxtScore, TxtGameOver, TxtNewBest, TxtLevelBanner, TxtIntro, TxtWarden, TxtWardenDown, TxtLangEN
+StrES: dw EsPressStart, EsBestLabel, EsHelp1, EsHelp2, EsScore, EsGameOver, EsNewBest, EsLevelBanner, EsIntro, EsWarden, EsWardenDown, TxtLangES
+
+; English and Spanish strings are the same width, so one layout serves both
 TxtPressStart: db "PRESS START", STR_END
+EsPressStart:  db "PULSA START", STR_END
 TxtBlank11:    db "           ", STR_END
-TxtBestLabel:  db "BEST", STR_END
-TxtScore:      db "SCORE", STR_END
-TxtGameOver:   db "GAME OVER", STR_END
+TxtBestLabel:  db "BEST ", STR_END
+EsBestLabel:   db "MEJOR", STR_END
+TxtScore:      db "SCORE ", STR_END
+EsScore:       db "PUNTOS", STR_END
+TxtGameOver:   db "  GAME OVER  ", STR_END
+EsGameOver:    db "FIN DEL JUEGO", STR_END
 TxtNewBest:    db " NEW BEST! ", STR_END
+EsNewBest:     db "NUEVO MEJOR", STR_END
 TxtHelp1:      db "DPAD MOVE  A DASH", STR_END
+EsHelp1:       db "CRUZ MUEVE A DASH", STR_END
 TxtHelp2:      db "CHAIN KILLS TO x9", STR_END
+EsHelp2:       db "ENCADENA HASTA x9", STR_END
 TxtLevelBanner: db "   -- LEVEL   --    ", STR_END
+EsLevelBanner:  db "   -- NIVEL   --    ", STR_END
 TxtCredit:     db "2026 STARFUN GAMES", STR_END
 TxtIntro:      db "  PURGE THE CORE!   ", STR_END
+EsIntro:       db "  PURGA EL NUCLEO!  ", STR_END
+TxtWarden:     db "   -- WARDEN --     ", STR_END
+EsWarden:      db "  -- GUARDIAN --    ", STR_END
+TxtWardenDown: db "    WARDEN DOWN!    ", STR_END
+EsWardenDown:  db "  GUARDIAN CAIDO!   ", STR_END
+TxtLangEN:     db "SELECT: ESPANOL", STR_END
+TxtLangES:     db "SELECT: ENGLISH", STR_END
 
 INCLUDE "sound.asm"
 INCLUDE "gfx.asm"
@@ -2375,6 +2445,7 @@ wTmp2:      db
 wTmp3:      db
 wBest:      ds 3
 wPaused:    db
+wLang:      db                  ; 0 = English, 1 = Spanish (SELECT on the title)
 wCur:       ds EN_SIZE
 ; music
 wMusOn:     db
