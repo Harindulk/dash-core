@@ -73,6 +73,7 @@ DEF S_AR_V   EQU 64
 DEF S_AR_D   EQU 65
 DEF S_DRIFT  EQU 66
 DEF S_CHASE  EQU 68
+DEF S_SPLIT  EQU 88
 DEF S_MARK   EQU 70
 DEF S_SPARK  EQU 72
 DEF S_DOT    EQU 73
@@ -110,6 +111,7 @@ DEF ET_NONE  EQU 0
 DEF ET_DRIFT EQU 1
 DEF ET_CHASE EQU 2
 DEF ET_SPAWN EQU 3
+DEF ET_SPLIT EQU 4               ; drifts; a kill breaks it into two drifters
 
 DEF P_MINX  EQU 8
 DEF P_MAXX  EQU 136
@@ -1552,6 +1554,62 @@ EnemyVsPlayer:
     jp nz, KillEnemy
     jp PlayerDie
 
+; two children at wCur's spot: they blink for SPLIT_BLINK frames, then fly apart diagonally.
+; The splitter's own slot is still non-empty in wEnemies, so it is never reused here.
+DEF SPLIT_BLINK EQU 24
+SplitChildren:
+    ld de, $00A0                ; child 1: right/up
+    ld bc, -$00A0
+    call .one
+    ld de, -$00A0               ; child 2: left/down
+    ld bc, $00A0
+.one
+    push bc
+    push de
+    ld hl, wEnemies
+    ld b, MAX_EN
+.find
+    ld a, [hl]
+    and a
+    jr z, .got
+    ld a, l
+    add EN_SIZE
+    ld l, a
+    adc h
+    sub l
+    ld h, a
+    dec b
+    jr nz, .find
+    pop de
+    pop bc
+    ret                         ; no free slot
+.got
+    ld a, ET_SPAWN
+    ld [hl+], a
+    ld a, SPAWN_TIME - SPLIT_BLINK
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+    ld a, [wCur + E_XH]
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+    ld a, [wCur + E_YH]
+    ld [hl+], a
+    pop de
+    ld a, e
+    ld [hl+], a                 ; vx
+    ld a, d
+    ld [hl+], a
+    pop bc
+    ld a, c
+    ld [hl+], a                 ; vy
+    ld a, b
+    ld [hl+], a
+    ld a, ET_DRIFT
+    ld [hl], a                  ; E_NEXT
+    ret
+
 ChaseAccel:
     ld a, [wLevel]
     add a
@@ -1589,6 +1647,9 @@ ChaseAccel:
     jp ClampVel
 
 KillEnemy:
+    ld a, [wCur + E_TYPE]
+    cp ET_SPLIT
+    call z, SplitChildren
     xor a
     ld [wCur + E_TYPE], a
     ld a, [wCur + E_XH]
@@ -1867,6 +1928,15 @@ UpdateSpawner:
     xor a
     ld [hl+], a
 .kind
+    ld b, ET_DRIFT
+    ld a, [wLevel]
+    and a
+    jr z, .setK
+    call Rand
+    and 7
+    cp 2
+    ld b, ET_SPLIT
+    jr c, .setK
     ld b, ET_DRIFT
     ld a, [wLevel]
     cp 2
@@ -2303,6 +2373,9 @@ RenderSprites:
 .alive
     cp ET_DRIFT
     ld d, S_DRIFT
+    jr z, .anim
+    cp ET_SPLIT
+    ld d, S_SPLIT
     jr z, .anim
     ld d, S_CHASE
 .anim

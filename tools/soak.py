@@ -59,7 +59,7 @@ def run(r):
         for i in range(12):
             b = A("wEnemies") + i * 16
             t = M[b]
-            if t > 3: bug(f"enemy {i} type {t}")
+            if t > 4: bug(f"enemy {i} type {t}")
             if t:
                 n += 1
                 ex, ey = M[b + 3], M[b + 5]

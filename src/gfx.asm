@@ -462,4 +462,22 @@ GameTiles:
     dw `00300300
     dw `03000030
     dw `00000000
+; 88 SPLIT A (a cell about to divide)
+    dw `03300330
+    dw `32233223
+    dw `32122123
+    dw `32222223
+    dw `32222223
+    dw `32122123
+    dw `32233223
+    dw `03300330
+; 89 SPLIT B (the halves pull apart)
+    dw `03300330
+    dw `32300323
+    dw `32200223
+    dw `32200223
+    dw `32200223
+    dw `32200223
+    dw `32300323
+    dw `03300330
 GameTilesEnd:

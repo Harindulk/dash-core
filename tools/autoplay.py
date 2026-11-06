@@ -35,7 +35,7 @@ def decide(pb, A, M, over_frames=999):
     for i in range(12):
         b = A("wEnemies") + i * 16
         t = M[b]
-        if t in (1, 2):
+        if t in (1, 2, 4):
             vx, vy = SV(M[b + 6], M[b + 7]) / 256, SV(M[b + 8], M[b + 9]) / 256
             ex, ey = M[b + 3] + 4 + vx * 6, M[b + 5] + 4 + vy * 6
             foes.append((abs(ex - px) + abs(ey - py), ex - px, ey - py, t))

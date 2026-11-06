@@ -125,6 +125,28 @@ check(rd(pb, "wEnemies", 16) == 0, "extended dash chains into second enemy")
 check(bcd(pb, "wScore") == 30, f"score 10 + 20 for a x2 chain (got {bcd(pb, 'wScore')})")
 check(rd(pb, "wCombo") == 3, "combo now x3")
 
+# ---- 2b: a splitter breaks into two blinking children that hatch into drifters ----
+pbs = boot()
+start_game(pbs)
+wr(pbs, "wSpawnT", 255)
+settle(pbs, lambda: clear_enemies(pbs))
+wr(pbs, "wFaceX", 1); wr(pbs, "wFaceY", 0); wr(pbs, "wDashCD", 0)
+put_enemy(pbs, 0, 100, 64, typ=4)
+wr(pbs, "wSpawnT", 255)
+pbs.button("a")
+types = []
+for _ in range(20):
+    pbs.tick(1)
+    types = [pbs.memory[addr(pbs, "wEnemies") + i * 16] for i in range(12)]
+    if types.count(3) == 2:
+        break
+check(types.count(3) == 2 and types.count(4) == 0, f"dashing a splitter leaves two blinking children (types {types})")
+wr(pbs, "wSpawnT", 255)
+pbs.tick(30)
+types = [pbs.memory[addr(pbs, "wEnemies") + i * 16] for i in range(12)]
+check(types.count(1) == 2, f"children hatch into two drifters (types {types})")
+pbs.stop(save=False)
+
 # ---- 3: whiffed dash resets combo ----
 wr(pb, "wDashCD", 0)
 wr(pb, "wFaceX", 0xFF)
