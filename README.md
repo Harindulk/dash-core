@@ -7,7 +7,7 @@ You are a small core in a closed arena. Touching anything kills you, unless you 
 dashing. Dash through enemies to destroy them, and every kill inside a dash stretches
 the dash and raises your multiplier, up to x9. A dash that hits nothing resets it.
 
-Every third level the Warden drops in: a machine the width of the arena, drawn on the
+At levels 4, 7 and 10 the Warden drops in: a machine the width of the arena, drawn on the
 background layer. It spits drifters in a line and sweeps a beam across your row. Its
 three nodes open one at a time; dash into an open node to break it, break all three to
 bring it down.
