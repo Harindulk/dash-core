@@ -735,6 +735,7 @@ TitleScreen:
     ld a, 11
     call QueueCopy
 .noBlink
+    call TitleSprites
     ld a, [wKeysNew]
     bit PAD_START, a
     jr z, .loop
@@ -745,6 +746,29 @@ TitleScreen:
     ld [wRng+1], a
     call SfxStart
     jp StartGame
+
+TitleSprites:
+    xor a
+    ld [wOamLo], a
+    ld a, [wFrame]
+    add a
+    and 63
+    ld l, a
+    ld h, HIGH(SineTable)
+    ld a, [hl]
+    add 72
+    ld b, a
+    ld a, [wFrame]
+    and 8
+    ld d, S_DRIFT
+    jr z, .t
+    inc d
+.t  ld e, 0
+    ld c, 16
+    call PutSprite
+    ld c, 136
+    call PutSprite
+    ret
 
 ; hl = map dst, a = first logo tile; 4 big letters, 3 columns apart
 DrawBigWord4:
@@ -1447,6 +1471,8 @@ KillEnemy:
     ld [wLevel], a
     ld a, 4
     ld [wFlash], a
+    ld a, 90
+    ld [wBanner], a
     jp SfxLevel
 
 PlayerDie:
@@ -1815,6 +1841,24 @@ CheckBest:
 
 ; ---------------------------------------------------------------
 UpdateHud:
+    ld a, [wBanner]
+    and a
+    jr z, .normal
+    dec a
+    ld [wBanner], a
+    and 8                       ; blink between banner and score
+    jr z, .normal
+    ld hl, wHud
+    ld de, TxtLevelBanner
+    call PrintStr
+    ld a, [wLevel]
+    inc a                       ; levels shown from 1
+    inc a                       ; digit tile = value + 1
+    ld [wHud + 12], a
+    ld a, 1
+    ld [wHudDirty], a
+    ret
+.normal
     ld hl, wHud
     ld de, wScore
     call PrintBCD6
@@ -2119,6 +2163,7 @@ TxtGameOver:   db "GAME OVER", STR_END
 TxtNewBest:    db " NEW BEST! ", STR_END
 TxtHelp1:      db "DPAD MOVE  A DASH", STR_END
 TxtHelp2:      db "CHAIN KILLS TO x9", STR_END
+TxtLevelBanner: db "   -- LEVEL   --    ", STR_END
 TxtCredit:     db "2026 STARFUN GAMES", STR_END
 
 INCLUDE "sound.asm"
@@ -2197,6 +2242,7 @@ wDeadT:     db
 wOver:      db
 wOverStep:  db
 wNewBest:   db
+wBanner:    db
 wGameVarsEnd:
 
 SECTION "HRAM", HRAM

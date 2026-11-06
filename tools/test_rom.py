@@ -167,6 +167,23 @@ pb.tick(150)
 check(bcd(pb, "wBest") == 0, "blank (FF) SRAM -> best 0")
 pb.stop(save=False)
 
+# ---- 7b: worst-case load still runs at full frame rate ----
+pb = boot()
+start_game(pb)
+wr(pb, "wSpawnT", 255)
+def load_up():
+    for i in range(12):
+        put_enemy(pb, i, 20 + i * 10, 20 + (i % 5) * 18, typ=2, vx=0x40, vy=-0x40)
+    pa = addr(pb, "wParts")
+    for i in range(12):
+        for j, v in enumerate([200, 30 + i * 8, 100, 0, 0, 72]):
+            pb.memory[pa + i * 6 + j] = v
+    wr(pb, "wPX", 8, 1); wr(pb, "wPY", 112, 1)
+settle(pb, load_up)
+f0 = rd(pb, "wFrame"); pb.tick(60); f1 = rd(pb, "wFrame")
+check((f1 - f0) & 0xFF == 60, f"12 chasers + 12 particles: 60 game frames in 60 LCD frames (got {(f1 - f0) & 0xFF})")
+pb.stop(save=False)
+
 # ---- 8: soak with random input: no crash, no stack creep ----
 rng = random.Random(7)
 pb = boot()
