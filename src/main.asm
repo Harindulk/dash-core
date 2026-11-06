@@ -909,6 +909,12 @@ StartGame:
     xor a
     ld [wHudDirty], a
     call RenderSprites
+    ld hl, TxtIntro
+    call SetBanner
+    ld a, 150
+    ld [wBanner], a
+    xor a
+    ldh [rBGP], a               ; first frame already white for the fade-in
     ld a, LCDC_ON
     call ScreenOn
     ld hl, SongGame
@@ -2334,6 +2340,7 @@ TxtHelp1:      db "DPAD MOVE  A DASH", STR_END
 TxtHelp2:      db "CHAIN KILLS TO x9", STR_END
 TxtLevelBanner: db "   -- LEVEL   --    ", STR_END
 TxtCredit:     db "2026 STARFUN GAMES", STR_END
+TxtIntro:      db "  PURGE THE CORE!   ", STR_END
 
 INCLUDE "sound.asm"
 INCLUDE "gfx.asm"
