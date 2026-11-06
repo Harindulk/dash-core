@@ -5,7 +5,8 @@ for [GBRetroDev'26: Heroes of ASM 3](https://itch.io/jam/gbretrodev26).
 
 You are a small core in a closed arena. Touching anything kills you, unless you are
 dashing. Dash through enemies to destroy them, and every kill inside a dash stretches
-the dash and raises your multiplier, up to x9. A dash that hits nothing resets it.
+the dash and raises your multiplier, up to x9. A dash that hits nothing resets it. Splitters break into two drifters when you dash
+through them, so one kill can feed a longer chain.
 
 At levels 4, 7 and 10 the Warden drops in: a machine the width of the arena, drawn on the
 background layer. It spits drifters in a line and sweeps a beam across your row. Its
@@ -52,9 +53,9 @@ and capture helpers only; nothing in them ends up in the ROM.
   two languages, SRAM save
 - `src/boss.asm`: the Warden. Every change to its tiles goes through a one-slot VBlank
   copy queue, so each routine writes at most one tile run per frame
-- `src/sound.asm`: a small pattern tracker (pulse lead on CH2, triangle bass on CH3)
-  with four songs (title, game, boss, win) plus sound effects on CH1 and CH4, so effects
-  never cut the music. Effects are panned left or right (NR51) by where they happen
+- `src/sound.asm`: a small pattern tracker on all four channels (pulse lead on CH2,
+  triangle bass on CH3, noise drums on CH4) with four songs (title, game, boss, win).
+  Sound effects use CH1 and borrow CH4 from the drums for a few frames. Effects are panned left or right (NR51) by where they happen
 - `src/gfx.asm`: the font (1bpp, expanded at load) and all tiles, drawn as source
 - `src/tables.asm`, `src/notes.inc`: note frequencies and the sine tables
 - The big title letters are built at boot by scaling font glyphs 2x in code
