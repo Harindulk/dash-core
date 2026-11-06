@@ -291,7 +291,7 @@ StatHandler:
     jr nc, .zero
     ld hl, wWavePhase
     add [hl]
-    and 31
+    and 63
     ld l, a
     ld h, HIGH(SineTable)
     ld a, [hl]
@@ -669,6 +669,10 @@ TitleScreen:
     ld bc, 32 * 32
     ld a, T_FLOOR
     call Memset
+    ld hl, _SCRN0 + 8 * 32      ; plain backdrop behind the text rows
+    ld bc, 10 * 32
+    xor a
+    call Memset
     ld hl, _SCRN0 + 2 * 32 + 4
     ld a, T_LOGO
     call DrawBigWord4
@@ -785,8 +789,8 @@ StartGame:
     call Memset
     PUTS _SCRN1 + 2 * 32 + 5, TxtGameOver
     PUTS _SCRN1 + 4 * 32 + 3, TxtScore
-    PUTS _SCRN1 + 5 * 32 + 3, TxtBestLabel
-    PUTS _SCRN1 + 9 * 32 + 4, TxtPressStart
+    PUTS _SCRN1 + 6 * 32 + 3, TxtBestLabel
+    PUTS _SCRN1 + 10 * 32 + 4, TxtPressStart
     ; reset game state
     ld hl, wGameVars
     ld bc, wGameVarsEnd - wGameVars
@@ -860,6 +864,12 @@ GameLoop:
     and a
     jr nz, GameLoop
 .noPause
+    ld a, [wKeysNew]
+    bit PAD_A, a
+    jr z, .noBuf
+    ld a, 8
+    ld [wDashBuf], a
+.noBuf
     call UpdateShake
     call UpdateFlash
     ld a, [wFreeze]
@@ -930,40 +940,34 @@ UpdateShake:
     jr z, .zero
     dec a
     ld [wShake], a
-    call Rand
+    ; amplitude decays with the timer: 1..3 px
+    srl a
+    srl a
+    inc a
+    cp 4
+    jr c, .amp
+    ld a, 3
+.amp
     ld b, a
-    and 7
-    call ShakeVal
-    ld [wSCX], a
+    ld a, [wFrame]
+    ld c, a
     ld a, b
-    rrca
-    rrca
-    rrca
-    and 7
-    call ShakeVal
-    ld [wSCY], a
+    bit 1, c
+    jr z, .sx
+    cpl
+    inc a
+.sx ld [wSCX], a
+    ld a, b
+    bit 2, c
+    jr z, .sy
+    cpl
+    inc a
+.sy ld [wSCY], a
     ret
 .zero
     ld [wSCX], a
     ld [wSCY], a
     ret
-
-ShakeVal:
-    ld hl, ShakeTab
-    add l
-    ld l, a
-    adc h
-    sub l
-    ld h, a
-    ld c, [hl]
-    ld a, [wShake]
-    cp 10
-    ld a, c
-    ret c
-    add a
-    ret
-
-ShakeTab: db 1, -1, 2, -2, 1, -1, 0, 2
 
 ; a = amount: shake at least this long
 AddShake:
@@ -1018,6 +1022,12 @@ UpdatePlayer:
     ld a, d
     ld [wFaceY], a
 .nf
+    ld a, [wDashBuf]
+    and a
+    jr z, .nb
+    dec a
+    ld [wDashBuf], a
+.nb
     ld a, [wGrace]
     and a
     jr z, .ng
@@ -1036,9 +1046,11 @@ UpdatePlayer:
     call SfxReady
     jr .walk
 .ready
-    ld a, [wKeysNew]
-    bit PAD_A, a
+    ld a, [wDashBuf]
+    and a
     jr z, .walk
+    xor a
+    ld [wDashBuf], a
     ld a, DASH_FRAMES
     ld [wDash], a
     xor a
@@ -1735,7 +1747,7 @@ UpdateDeath:
     ld hl, TxtNewBest
     jr nz, .s2
     ld hl, TxtBlank11
-.s2 ld de, _SCRN1 + 7 * 32 + 4
+.s2 ld de, _SCRN1 + 8 * 32 + 4
     ld a, 11
     call QueueCopy
     jr .slide
@@ -1751,7 +1763,7 @@ UpdateDeath:
     ld de, wBest
     call PrintBCD6
     ld hl, wCopyBuf
-    ld de, _SCRN1 + 5 * 32 + 10
+    ld de, _SCRN1 + 6 * 32 + 10
     ld a, 6
     call QueueCopy
 .slide
@@ -1851,6 +1863,10 @@ MeterTile:
 ; ---------------------------------------------------------------
 ; b = y, c = x (screen pixels), d = tile, e = attr. Keeps bc, de, hl.
 PutSprite:
+    ld a, [wWY]
+    sub 8
+    cp b
+    ret c                       ; would overlap the window panel
     push hl
     ld h, HIGH(wShadowOAM)
     ld a, [wOamLo]
@@ -2158,6 +2174,7 @@ wDash:      db
 wDashCD:    db
 wDashKills: db
 wGrace:     db
+wDashBuf:   db
 wAlive:     db
 wTrail:     ds 16
 wTrailIdx:  db
