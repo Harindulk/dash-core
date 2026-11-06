@@ -196,6 +196,65 @@ check(rd(pb, "wAlive") == 0 and rd(pb, "wWaveAmp") == 3 and rd(pb, "wWave") >= 2
       "death: 8 px wave for 24 frames with the invert flash")
 pb.stop(save=False)
 
+# ---- 7c: the Warden (boss at level 3) ----
+def to_level3(pb):
+    wr(pb, "wSpawnT", 255)
+    settle(pb, lambda: clear_enemies(pb))
+    wr(pb, "wLevel", 2); wr(pb, "wKillsLvl", 5)
+    wr(pb, "wFaceX", 1); wr(pb, "wFaceY", 0); wr(pb, "wDashCD", 0)
+    put_enemy(pb, 0, 100, 64)
+    pb.button("a"); pb.tick(20)
+
+def hold_attacks(pb):
+    wr(pb, "wBossAtk", 250); wr(pb, "wBossBeamT", 250); wr(pb, "wSpawnT", 255)
+
+pb = boot(); start_game(pb)
+to_level3(pb)
+check(rd(pb, "wLevel") == 3 and rd(pb, "wBoss") == 1, "18th kill reaches level 3 and the Warden starts entering")
+pb.tick(80)
+check(rd(pb, "wBoss") == 2 and pb.memory[0x9800 + 32 + 7] == 78 and pb.memory[0x9800 + 96 + 7] == 82,
+      "Warden drawn on the BG (vent row, closed node) and live")
+check(rd(pb, "wTopY") == 32, "arena top clamped under the boss")
+broken = 0; score0 = bcd(pb, "wScore"); idx = 0xFF
+for n in range(3):
+    settle(pb, lambda: (clear_enemies(pb), wr(pb, "wPX", 72, 1), wr(pb, "wPY", 100, 1)))
+    for i in range(400):
+        if i % 100 == 0: hold_attacks(pb)
+        pb.tick()
+        if rd(pb, "wBossOpen") != 0xFF: break
+    idx = rd(pb, "wBossOpen")
+    if idx == 0xFF: break
+    settle(pb, lambda: (clear_enemies(pb), wr(pb, "wPX", 52 + idx * 24, 1), wr(pb, "wPY", 44, 1)))
+    wr(pb, "wFaceX", 0); wr(pb, "wFaceY", 0xFF); wr(pb, "wDashCD", 0); wr(pb, "wDash", 0)
+    pb.button("a")
+    for i in range(30):
+        pb.tick()
+        if not (rd(pb, "wBossNodes") & (1 << idx)):
+            broken += 1; break
+check(broken == 3, f"dashing into each open node breaks it ({broken}/3)")
+check(bcd(pb, "wScore") >= score0 + 300, f"node breaks score 100 x combo (score {bcd(pb, 'wScore')})")
+check(rd(pb, "wBoss") == 3, "third node: Warden dying")
+pb.tick(130)
+check(rd(pb, "wBoss") == 0 and rd(pb, "wTopY") == 8 and pb.memory[0x9800 + 32 + 7] == 48,
+      "Warden gone, arena restored, top clamp back to 8")
+check(bcd(pb, "wScore") >= score0 + 3300, f"boss bonus 3000 at level 3 (score {bcd(pb, 'wScore')})")
+check(rd(pb, "wAlive") == 1 and rd(pb, "wMusOn") == 1, "player alive, music playing after the fight")
+pb.stop(save=False)
+
+# ---- 7d: the beam kills a standing player in its row ----
+pb = boot(); start_game(pb)
+to_level3(pb); pb.tick(80)
+settle(pb, lambda: (clear_enemies(pb), wr(pb, "wPX", 72, 1), wr(pb, "wPY", 80, 1)))
+wr(pb, "wBossAtk", 250); wr(pb, "wBossBeamT", 2); wr(pb, "wSpawnT", 255)
+died = None
+for i in range(90):
+    pb.tick()
+    if rd(pb, "wAlive") == 0:
+        died = i; break
+check(rd(pb, "wBossBeamRow") == 11, f"beam targets the player's row (row {rd(pb, 'wBossBeamRow')})")
+check(died is not None and 40 < died < 70, f"beam warns, then kills a player standing in the row (frame {died})")
+pb.stop(save=False)
+
 # ---- 7b: worst-case load still runs at full frame rate ----
 pb = boot()
 start_game(pb)
@@ -211,6 +270,13 @@ def load_up():
 settle(pb, load_up)
 f0 = rd(pb, "wFrame"); pb.tick(60); f1 = rd(pb, "wFrame")
 check((f1 - f0) & 0xFF == 60, f"12 chasers + 12 particles: 60 game frames in 60 LCD frames (got {(f1 - f0) & 0xFF})")
+wr(pb, "wLevel", 2); wr(pb, "wKillsLvl", 5)
+settle(pb, lambda: (clear_enemies(pb), wr(pb, "wFaceX", 1), wr(pb, "wFaceY", 0), wr(pb, "wDashCD", 0), wr(pb, "wPX", 72, 1), wr(pb, "wPY", 60, 1)))
+put_enemy(pb, 0, 100, 64); pb.button("a"); pb.tick(100)
+wr(pb, "wSpawnT", 255)
+settle(pb, load_up)
+f0 = rd(pb, "wFrame"); pb.tick(60); f1 = rd(pb, "wFrame")
+check(rd(pb, "wBoss") == 2 and (f1 - f0) & 0xFF == 60, f"same load with the Warden live: 60/60 (got {(f1 - f0) & 0xFF}, boss {rd(pb, 'wBoss')})")
 pb.stop(save=False)
 
 # ---- 8: soak with random input: no crash, no stack creep ----

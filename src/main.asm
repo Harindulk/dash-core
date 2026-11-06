@@ -77,6 +77,14 @@ DEF S_MARK   EQU 70
 DEF S_SPARK  EQU 72
 DEF S_DOT    EQU 73
 DEF T_METER  EQU 74
+DEF T_BOSS_VENT   EQU 78
+DEF T_BOSS_HULL   EQU 79
+DEF T_BOSS_EYE    EQU 80
+DEF T_NODE_CLOSED EQU 82
+DEF T_NODE_OPEN   EQU 83
+DEF T_NODE_BROKEN EQU 85
+DEF T_BEAM        EQU 86
+DEF T_BEAM_WARN   EQU 87
 DEF T_LOGO   EQU 128
 
 ; ---------------- game constants ----------------
@@ -867,6 +875,8 @@ StartGame:
     ld [wCombo], a
     ld a, 50
     ld [wSpawnT], a
+    ld a, 8
+    ld [wTopY], a
     ld a, 136
     ld [wWY], a
     ldh [rWY], a
@@ -952,6 +962,12 @@ GameLoop:
     call UpdateEnemies
     call UpdateSpawner
     call UpdateParticles
+    call UpdateBoss
+    ld a, [wMusOn]              ; a jingle ended: back to the stage music
+    and a
+    jr nz, .render
+    ld hl, SongGame
+    call MusicPlay
     jr .render
 .dead
     call UpdateEnemies
@@ -960,7 +976,7 @@ GameLoop:
 .render
     call UpdateHud
     call RenderSprites
-    jr GameLoop
+    jp GameLoop
 
 DrawArena:
     ld hl, _SCRN0
@@ -1225,7 +1241,8 @@ UpdatePlayer:
     ld c, P_MAXX
     call ClampPos
     ld hl, wPY + 1
-    ld b, P_MINY
+    ld a, [wTopY]
+    ld b, a
     ld c, P_MAXY
     call ClampPos
     ; record trail
@@ -1424,7 +1441,8 @@ EnemyStep:
     ld hl, wCur + E_YL
     call AddVel
     ld hl, wCur + E_YH
-    ld b, P_MINY
+    ld a, [wTopY]
+    ld b, a
     ld c, E_MAXY
     call BouncePos
     jr nc, .nby
@@ -1594,11 +1612,17 @@ KillEnemy:
     ld a, 3
     ld b, 6
     call StartWave
+    ld hl, TxtLevelBanner
+    call SetBanner
+    ld a, 1
+    ld [wBannerLvl], a
     ld a, 90
     ld [wBanner], a
     ld a, 80
     call SetPan
-    jp SfxLevel
+    call SfxLevel
+    ld a, [wLevel]
+    jp BossMaybeStart
 
 PlayerDie:
     xor a
@@ -1713,6 +1737,12 @@ UpdateSpawner:
     ret
 .ok
     pop hl
+    ld a, [wTopY]
+    add 4
+    cp c
+    jr c, .yok
+    ld c, a
+.yok
     ld a, ET_SPAWN
     ld [hl+], a
     xor a
@@ -1981,12 +2011,19 @@ UpdateHud:
     and 8                       ; blink between banner and score
     jr z, .normal
     ld hl, wHud
-    ld de, TxtLevelBanner
+    ld a, [wBannerTxt]
+    ld e, a
+    ld a, [wBannerTxt+1]
+    ld d, a
     call PrintStr
+    ld a, [wBannerLvl]
+    and a
+    jr z, .dirty
     ld a, [wLevel]
     inc a                       ; levels shown from 1
     inc a                       ; digit tile = value + 1
     ld [wHud + 12], a
+.dirty
     ld a, 1
     ld [wHudDirty], a
     ret
@@ -2301,6 +2338,7 @@ TxtCredit:     db "2026 STARFUN GAMES", STR_END
 INCLUDE "sound.asm"
 INCLUDE "gfx.asm"
 INCLUDE "tables.asm"
+INCLUDE "boss.asm"
 
 ; ===============================================================
 ;  RAM
@@ -2377,6 +2415,20 @@ wBanner:    db
 wFlashKind: db
 wWave:      db
 wWaveAmp:   db
+wTopY:      db                  ; top clamp for player and enemies (8, or 32 under the boss)
+wBannerTxt: dw
+wBannerLvl: db                  ; 1 = poke the level digit into the banner
+wBoss:      db
+wBossStep:  db
+wBossT:     db
+wBossNodes: db                  ; bit per node still intact
+wBossNext:  db
+wBossOpen:  db                  ; open node 0..2, $FF none
+wBossOpenT: db
+wBossAtk:   db
+wBossBeam:  db
+wBossBeamT: db
+wBossBeamRow: db
 wGameVarsEnd:
 
 SECTION "HRAM", HRAM

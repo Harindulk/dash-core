@@ -306,6 +306,42 @@ SfxLevel:
     ld a, $16
     jp Ch1Shot
 
+SfxAlarm:                       ; the Warden arrives
+    ld a, A4
+    call NoteFreq
+    ld b, $80
+    ld c, $F2
+    xor a
+    call Ch1Shot
+    ld a, $A3
+    ld b, $62
+    jp NoiseShot
+
+SfxBossHit:                     ; a node breaks: crunch and a falling sweep
+    ld b, $80
+    ld c, $F3
+    ld de, $0500
+    ld a, $2E
+    call Ch1Shot
+    ld a, $F3
+    ld b, $55
+    jp NoiseShot
+
+SfxBeam:                        ; beam fires
+    ld a, $F6
+    ld b, $37
+    jp NoiseShot
+
+SfxBossDie:                     ; long rumble
+    ld b, $80
+    ld c, $F7
+    ld de, $0300
+    ld a, $3F
+    call Ch1Shot
+    ld a, $F7
+    ld b, $7A
+    jp NoiseShot
+
 ; ---------------- data ----------------
 SECTION "SoundData", ROM0
 WaveData:                       ; triangle
@@ -352,3 +388,22 @@ TBE: db E3,HOLD,HOLD,HOLD,HOLD,HOLD,HOLD,OFF, E3,HOLD,HOLD,HOLD,HOLD,HOLD,HOLD,O
 
 JG: db E5,HOLD,D5,HOLD, C5,HOLD,B4,HOLD, A4,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
 JB: db A3,HOLD,HOLD,OFF, G3,HOLD,HOLD,OFF, A3,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
+
+SongBoss:
+    db 6, $80, $93
+    dw X1, BE, X2, BE, X3, BAm, X4, BE
+    dw 0, 0
+
+SongWin:
+    db 6, $80, $A2
+    dw W1, WB, W2, WB2
+    dw 1, 1
+
+X1: db E5,HOLD,E5,HOLD, Gs5,HOLD,E5,HOLD, B5,HOLD,A5,HOLD, Gs5,HOLD,E5,HOLD
+X2: db E5,HOLD,OFF,E5, Gs5,OFF,B5,HOLD, D6,HOLD,B5,HOLD, Gs5,HOLD,OFF,OFF
+X3: db A5,HOLD,C6,HOLD, E6,HOLD,C6,HOLD, A5,HOLD,E5,HOLD, A5,HOLD,OFF,OFF
+X4: db B5,HOLD,A5,HOLD, Gs5,HOLD,E5,HOLD, Fs5,HOLD,Gs5,HOLD, B4,HOLD,OFF,OFF
+W1: db E5,HOLD,Gs5,HOLD, B5,HOLD,E6,HOLD, HOLD,HOLD,HOLD,HOLD, OFF,OFF,OFF,OFF
+W2: db E6,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, OFF,OFF,OFF,OFF
+WB:  db E3,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, B3,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
+WB2: db E3,HOLD,HOLD,HOLD, HOLD,HOLD,HOLD,HOLD, E4,HOLD,HOLD,HOLD, HOLD,HOLD,OFF,OFF
