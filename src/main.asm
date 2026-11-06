@@ -337,9 +337,9 @@ StatHandler:
     jr nz, .game
     ldh a, [rLY]
     cp 15
-    jr c, .zero
+    jr c, .top                  ; tread band above the logo drifts left
     cp 56
-    jr nc, .zero
+    jr nc, .low
     ld l, a
     ldh a, [hWavePhase]
     add l
@@ -347,6 +347,20 @@ StatHandler:
     ld l, a
     ld h, HIGH(SineTable)
     ld a, [hl]
+    ldh [rSCX], a
+    pop hl
+    pop af
+    reti
+.top
+    ldh a, [hParaA]
+    ldh [rSCX], a
+    pop hl
+    pop af
+    reti
+.low
+    cp 63
+    jr nc, .zero
+    ldh a, [hParaB]             ; band below the logo drifts right
     ldh [rSCX], a
     pop hl
     pop af
@@ -736,7 +750,11 @@ TitleScreen:
     ld bc, 32 * 32
     ld a, T_FLOOR
     call Memset
-    ld hl, _SCRN0 + 8 * 32      ; plain backdrop behind the text rows
+    ld hl, _SCRN0 + 2 * 32      ; plain backdrop behind the logo and text; tread stays
+    ld bc, 5 * 32               ; only in the two parallax bands (rows 0-1 and 7)
+    xor a
+    call Memset
+    ld hl, _SCRN0 + 8 * 32
     ld bc, 10 * 32
     xor a
     call Memset
@@ -793,6 +811,13 @@ TitleScreen:
     ldh a, [hWavePhase]
     inc a
     ldh [hWavePhase], a
+    ld a, [wFrame]              ; parallax: top band +1/2 px per frame, bottom band -1/2
+    srl a
+    ldh [hParaA], a
+    ld [wSCX], a                ; line 0 takes its SCX from VBlank
+    cpl
+    inc a
+    ldh [hParaB], a
     ld a, [wFrame]
     and 31
     jr nz, .noBlink
@@ -2519,5 +2544,7 @@ wGameVarsEnd:
 SECTION "HRAM", HRAM
 hOAMDMA: ds DMARoutineEnd - DMARoutine
 hStatMode: db                   ; 0 = title ripple, 1 = game wave
+hParaA:     db                   ; title parallax SCX, top band
+hParaB:     db                   ; title parallax SCX, band under the logo
 hWavePhase: db
 hWaveHi: db                     ; HIGH(wave table) for the current amplitude

@@ -58,8 +58,9 @@ and capture helpers only; nothing in them ends up in the ROM.
 - `src/gfx.asm`: the font (1bpp, expanded at load) and all tiles, drawn as source
 - `src/tables.asm`, `src/notes.inc`: note frequencies and the sine tables
 - The big title letters are built at boot by scaling font glyphs 2x in code
-- Raster: the title ripple and the in-game shockwave are HBlank (STAT mode 0) interrupts
-  that change SCX on every line. The in-game one runs on hit-stop frames, when the game
+- Raster: one HBlank (STAT mode 0) interrupt changes SCX per line. On the title it runs a
+  three-band parallax (tread band left, logo ripple, tread band right); in game it draws the
+  shockwave. The in-game one runs on hit-stop frames, when the game
   logic is idle, and grows with the chain
 - Palette: fade-in from white at boot, a BGP cycle on level-up, a flash on death
 - Game feel: hit-stop on kills, screen shake that decays, afterimages, input buffering

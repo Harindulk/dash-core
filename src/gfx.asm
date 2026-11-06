@@ -102,15 +102,15 @@ DoubleTable:
 ; ---------------------------------------------------------------
 SECTION "GameTiles", ROM0
 GameTiles:
-; 48 FLOOR
+; 48 FLOOR (diamond tread plate: a \ ridge and a / ridge per tile)
+    dw `00000000
+    dw `00100000
+    dw `00010000
     dw `00000000
     dw `00000000
+    dw `00000100
+    dw `00001000
     dw `00000000
-    dw `00000000
-    dw `00000000
-    dw `00000000
-    dw `00000000
-    dw `00000001
 ; 49 OUT
     dw `33333333
     dw `33333333
