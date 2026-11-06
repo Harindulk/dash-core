@@ -176,6 +176,7 @@ DEF STR_INTRO   EQU 8
 DEF STR_WARDEN  EQU 9
 DEF STR_WDOWN   EQU 10
 DEF STR_LANG    EQU 11
+DEF STR_SECURE  EQU 12
 
 ; ===============================================================
 SECTION "VBlankVec", ROM0[$40]
@@ -1616,6 +1617,11 @@ ChaseAccel:
     add a
     add a
     add $70
+    ld b, a
+    ld a, [wLoop]               ; each loop after the third Warden: chasers +16 top speed
+    and 3
+    swap a
+    add b
     ld [wTmp], a                ; max speed
     ld a, [wPX + 1]
     add 4
@@ -1812,6 +1818,9 @@ UpdateSpawner:
     jr nz, .cnt
     ld a, [wLevel]
     add 4
+    ld b, a
+    ld a, [wLoop]               ; each loop: one more enemy on screen
+    add b
     cp MAX_EN + 1
     jr c, .capOk
     ld a, MAX_EN
@@ -1897,6 +1906,15 @@ UpdateSpawner:
     call Rand
     and 31
     add d
+    ld d, a
+    ld a, [wLoop]               ; each loop: +32 speed, capped below one pixel per frame
+    and 3
+    swap a
+    add a
+    add d
+    jr nc, .spdOk
+    ld a, $F8
+.spdOk
     ld d, a
     call Rand
     ld e, a
@@ -2486,8 +2504,8 @@ StrLang:
     ld e, a
     ret
 
-StrEN: dw TxtPressStart, TxtBestLabel, TxtHelp1, TxtHelp2, TxtScore, TxtGameOver, TxtNewBest, TxtLevelBanner, TxtIntro, TxtWarden, TxtWardenDown, TxtLangEN
-StrES: dw EsPressStart, EsBestLabel, EsHelp1, EsHelp2, EsScore, EsGameOver, EsNewBest, EsLevelBanner, EsIntro, EsWarden, EsWardenDown, TxtLangES
+StrEN: dw TxtPressStart, TxtBestLabel, TxtHelp1, TxtHelp2, TxtScore, TxtGameOver, TxtNewBest, TxtLevelBanner, TxtIntro, TxtWarden, TxtWardenDown, TxtLangEN, TxtSecure
+StrES: dw EsPressStart, EsBestLabel, EsHelp1, EsHelp2, EsScore, EsGameOver, EsNewBest, EsLevelBanner, EsIntro, EsWarden, EsWardenDown, TxtLangES, EsSecure
 
 ; English and Spanish strings are the same width, so one layout serves both
 TxtPressStart: db "PRESS START", STR_END
@@ -2514,6 +2532,8 @@ TxtWarden:     db "   -- WARDEN --     ", STR_END
 EsWarden:      db "  -- GUARDIAN --    ", STR_END
 TxtWardenDown: db "    WARDEN DOWN!    ", STR_END
 EsWardenDown:  db "  GUARDIAN CAIDO!   ", STR_END
+TxtSecure:     db "   CORE SECURED!    ", STR_END
+EsSecure:      db "  NUCLEO A SALVO!   ", STR_END
 TxtLangEN:     db "SELECT: ESPANOL", STR_END
 TxtLangES:     db "SELECT: ENGLISH", STR_END
 
@@ -2588,6 +2608,7 @@ wScore:     ds 3
 wCombo:     db
 wKillsLvl:  db
 wLevel:     db
+wLoop:      db                  ; times the level-10 Warden has fallen
 wSpawnT:    db
 wFreeze:    db
 wShake:     db

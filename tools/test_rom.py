@@ -276,6 +276,36 @@ check(bcd(pb, "wScore") >= score0 + 3300, f"boss bonus 3000 at level 3 (score {b
 check(rd(pb, "wAlive") == 1 and rd(pb, "wMusOn") == 1, "player alive, music playing after the fight")
 pb.stop(save=False)
 
+# ---- 7c: the level-10 Warden ends a loop: CORE SECURED, back to level 1, faster ----
+pb = boot(); start_game(pb)
+wr(pb, "wSpawnT", 255)
+settle(pb, lambda: clear_enemies(pb))
+wr(pb, "wLevel", 8); wr(pb, "wKillsLvl", 5)
+wr(pb, "wFaceX", 1); wr(pb, "wFaceY", 0); wr(pb, "wDashCD", 0)
+put_enemy(pb, 0, 100, 64)
+pb.button("a"); pb.tick(100)
+check(rd(pb, "wLevel") == 9 and rd(pb, "wBoss") == 2, "level 10 brings the last Warden")
+for n in range(3):
+    settle(pb, lambda: (clear_enemies(pb), wr(pb, "wPX", 72, 1), wr(pb, "wPY", 100, 1)))
+    for i in range(400):
+        if i % 100 == 0: hold_attacks(pb)
+        pb.tick()
+        if rd(pb, "wBossOpen") != 0xFF: break
+    idx = rd(pb, "wBossOpen")
+    if idx == 0xFF: break
+    settle(pb, lambda: (clear_enemies(pb), wr(pb, "wPX", 52 + idx * 24, 1), wr(pb, "wPY", 44, 1)))
+    wr(pb, "wFaceX", 0); wr(pb, "wFaceY", 0xFF); wr(pb, "wDashCD", 0); wr(pb, "wDash", 0)
+    pb.button("a")
+    for i in range(30):
+        pb.tick()
+        if not (rd(pb, "wBossNodes") & (1 << idx)): break
+banner = rd(pb, "wBannerTxt") | rd(pb, "wBannerTxt", 1) << 8
+check(rd(pb, "wLoop") == 1 and rd(pb, "wLevel") == 0 and banner == addr(pb, "TxtSecure"),
+      f"last Warden down: loop 1, level 1, CORE SECURED banner (loop {rd(pb, 'wLoop')}, level {rd(pb, 'wLevel')})")
+pb.tick(200)
+check(rd(pb, "wAlive") == 1 and rd(pb, "wBoss") == 0, "play continues into loop 2")
+pb.stop(save=False)
+
 # ---- 7d: the beam kills a standing player in its row ----
 pb = boot(); start_game(pb)
 to_level3(pb); pb.tick(80)

@@ -516,7 +516,17 @@ BossHitTest:
     adc 0
     daa
     ld [hl], a
+    ld a, [wLevel]              ; the level-10 Warden ends a loop: start over at level 1, faster
+    cp 9
     ld a, STR_WDOWN
+    jr nz, .banner
+    ld hl, wLoop
+    inc [hl]
+    xor a
+    ld [wLevel], a
+    ld [wKillsLvl], a
+    ld a, STR_SECURE
+.banner
     call SetBanner
     ld a, 80
     call SetPan
