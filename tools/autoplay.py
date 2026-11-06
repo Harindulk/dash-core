@@ -4,9 +4,25 @@ nodes, dodges the beam, restarts after game over. decide() returns the d-pad set
 SV = lambda lo, hi: (lo | hi << 8) - (65536 if hi & 0x80 else 0)
 
 
-def decide(pb, A, M):
+def flee(t):
+    d, dx, dy, k = t
+    return {"left" if dx > 0 else "right", "up" if dy > 0 else "down"}
+
+
+def aim(pb, t):
+    """press A and return the d-pad that points the dash at t"""
+    d, dx, dy, k = t
+    pb.button("a")
+    if abs(dx) <= 4:
+        return {"down" if dy > 0 else "up"}
+    if abs(dy) <= 4:
+        return {"right" if dx > 0 else "left"}
+    return {"right" if dx > 0 else "left", "down" if dy > 0 else "up"}
+
+
+def decide(pb, A, M, over_frames=999):
     if not M[A("wAlive")]:
-        if M[A("wOver")] and M[A("wWY")] == 56:
+        if M[A("wOver")] and M[A("wWY")] == 56 and over_frames >= 150:
             pb.button("start")
         return set()
     px, py = M[A("wPX") + 1] + 8, M[A("wPY") + 1] + 8
@@ -15,7 +31,6 @@ def decide(pb, A, M):
     if dash:                    # the d-pad steers a dash every frame: hold still so it flies straight
         return set()
     boss, node, beam, brow = M[A("wBoss")], M[A("wBossOpen")], M[A("wBossBeam")], M[A("wBossBeamRow")]
-    # enemies: active ones, and markers about to hatch
     foes, marks = [], []
     for i in range(12):
         b = A("wEnemies") + i * 16
@@ -28,41 +43,50 @@ def decide(pb, A, M):
             ex, ey = M[b + 3] + 4, M[b + 5] + 4
             marks.append((abs(ex - px) + abs(ey - py), ex - px, ey - py, t))
     foes.sort(); marks.sort()
-    near = foes[0] if foes and foes[0][0] < 30 else None
-    if marks and marks[0][0] < 24 and (near is None or marks[0][0] < near[0]):
-        near = marks[0]
-    # 1. beam: leave the row (a dash is also safe)
-    if beam and abs((py >> 3) - brow) <= 1:
-        if beam == 2 and ready:
-            pb.button("a")
-            return {"left" if px > 80 else "right"}
-        return {"down"} if brow < 11 else {"up"}
-    # 2. an open node: line up under it and dash up (unless something is on top of us)
-    if boss == 2 and node != 0xFF and near is None:
+
+    def threat(rf, rm):
+        c = [t for t in foes[:1] if t[0] < rf] + [t for t in marks[:1] if t[0] < rm]
+        return min(c) if c else None
+
+    # 1. beam: the game kills within 11 px of the row centre; get 15 px clear (a dash is safe too)
+    if beam and boss == 2:
+        dyb = py - (brow * 8 + 4)
+        if abs(dyb) < 15:
+            if beam == 2 and ready:
+                pb.button("a")
+                return {"left" if px > 80 else "right"}
+            return {"up" if dyb < 0 else "down"}
+    # 2. an open node: it is the priority; only an imminent threat interrupts
+    if boss == 2 and node != 0xFF:
         nx = 60 + node * 24
         dx = nx - px
-        want = set()
+        t = threat(18, 14)
+        if t:
+            if ready and t[3] != 3:
+                return aim(pb, t)
+            return flee(t)
         if abs(dx) > 2:
-            want.add("right" if dx > 0 else "left")
-            if py < 56: want.add("down")
+            want = {"right" if dx > 0 else "left"}
+            if py < 60: want.add("down")
             if py > 76: want.add("up")
-        else:
-            want.add("up")
-            if ready and py < 90:
-                pb.button("a")
-        return want
-    if near and (near[3] == 3 or not ready):
-        d, dx, dy, t = near          # hazard close and no dash: step away
-        return {"left" if dx > 0 else "right", "up" if dy > 0 else "down"}
+            return want
+        if ready and py < 92:
+            pb.button("a")
+        return {"up"}
+    # 3. open play
+    t = threat(30, 24)
+    if t and (t[3] == 3 or not ready):
+        return flee(t)
+    if boss == 2 and py < 44:    # keep clear of the hull while the nodes are shut
+        return {"down"}
     if not foes:
-        # drift back to the middle
         want = set()
         if px < 70: want.add("right")
         if px > 90: want.add("left")
         if py < 60: want.add("down")
         if py > 80: want.add("up")
         return want
-    d, dx, dy, t = foes[0]
+    d, dx, dy, k = foes[0]
     H = "right" if dx > 0 else "left"
     V = "down" if dy > 0 else "up"
     if ready:

@@ -49,8 +49,10 @@ pb.button("start")
 step()
 held = set()
 prev = dict(boss=0, nodes=7, alive=1, over=0, combo=1)
+over_since = None
 for f in range(MAX_S * 60):
-    held = apply(pb, held, decide(pb, A, M))
+    over_since = (over_since + 1 if over_since is not None else 0) if M[A("wOver")] else None
+    held = apply(pb, held, decide(pb, A, M, over_since if over_since is not None else 999))
     step()
     boss, nodes, alive, over = M[A("wBoss")], M[A("wBossNodes")], M[A("wAlive")], M[A("wOver")]
     if boss == 1 and prev["boss"] == 0: mark("boss_enter")
@@ -65,6 +67,9 @@ for f in range(MAX_S * 60):
         break
 for k in list(held):
     pb.button_release(k)
+for _ in range(170):                      # let the game-over panel land and sit
+    step()
+    if M[A("wOver")]: mark("gameover")
 pb.stop(save=False)
 n = len(frames)
 print("recorded", n, "frames; events", {k: v for k, v in sorted(ev.items(), key=lambda kv: kv[1])})
