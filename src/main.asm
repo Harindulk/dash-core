@@ -135,6 +135,10 @@ DEF PAL_NORMAL EQU %11100100
 DEF PAL_INVERT EQU %00011011
 DEF PAL_LIGHT  EQU %10010000
 
+DEF FLASH_INVERT EQU 0
+DEF FLASH_CYCLE  EQU 1
+DEF FLASH_FADEIN EQU 2
+
 DEF LCDC_ON EQU %11110011       ; LCD, win map 9C00, win on, tiles 8000, BG 9800, OBJ on, BG on
 
 MACRO PUTS                     ; PRINT dest, string_label
@@ -272,6 +276,13 @@ VBlankHandler:
     ld [wCopyLen], a
 .noCopy
     call MusicTick
+    ld a, [wWave]               ; HBlank wave only while a wave runs
+    and a
+    ld a, %00000001
+    jr z, .ie
+    ld a, %00000011
+.ie
+    ldh [rIE], a
     ld a, 1
     ld [wVBlankDone], a
     pop hl
@@ -280,17 +291,23 @@ VBlankHandler:
     pop af
     reti
 
-; HBlank interrupt (title only): ripple the logo lines
+; HBlank interrupt. Title: ripple the logo lines. Game: full-screen SCX wave,
+; enabled through IE only while wWave > 0 (it rides on hit-stop frames, so it
+; never competes with the game logic for frame time).
 StatHandler:
     push af
     push hl
+    ldh a, [hStatMode]
+    and a
+    jr nz, .game
     ldh a, [rLY]
     cp 15
     jr c, .zero
     cp 56
     jr nc, .zero
-    ld hl, wWavePhase
-    add [hl]
+    ld l, a
+    ldh a, [hWavePhase]
+    add l
     and 63
     ld l, a
     ld h, HIGH(SineTable)
@@ -301,6 +318,21 @@ StatHandler:
     reti
 .zero
     xor a
+    ldh [rSCX], a
+    pop hl
+    pop af
+    reti
+.game
+    ldh a, [hWavePhase]
+    ld l, a
+    ldh a, [rLY]
+    add l
+    and 63
+    ld l, a
+    ldh a, [hWaveHi]
+    ld h, a
+    ld a, [wSCX]
+    add [hl]
     ldh [rSCX], a
     pop hl
     pop af
@@ -706,6 +738,8 @@ TitleScreen:
     ldh [rWY], a
     ld a, PAL_NORMAL
     ld [wBGP], a
+    xor a
+    ldh [hStatMode], a
     ; HBlank interrupt for the logo ripple (set while LCD is off: no DMG STAT-write glitch)
     ld a, %00001000
     ldh [rSTAT], a
@@ -720,8 +754,9 @@ TitleScreen:
     call ReadInput
     ld hl, wFrame
     inc [hl]
-    ld hl, wWavePhase
-    inc [hl]
+    ldh a, [hWavePhase]
+    inc a
+    ldh [hWavePhase], a
     ld a, [wFrame]
     and 31
     jr nz, .noBlink
@@ -796,8 +831,10 @@ DrawBigWord4:
 StartGame:
     ld sp, $E000
     call LcdOff
-    xor a
+    ld a, %00001000             ; HBlank STAT source stays armed; IE bit 1 gates it
     ldh [rSTAT], a
+    ld a, 1
+    ldh [hStatMode], a
     ld a, %00000001
     ldh [rIE], a
     ; background: dark outside, framed arena
@@ -835,6 +872,10 @@ StartGame:
     ldh [rWY], a
     ld a, PAL_NORMAL
     ld [wBGP], a
+    ld a, FLASH_FADEIN
+    ld [wFlashKind], a
+    ld a, 16
+    ld [wFlash], a
     xor a
     ld [wSCX], a
     ld [wSCY], a
@@ -896,6 +937,7 @@ GameLoop:
 .noBuf
     call UpdateShake
     call UpdateFlash
+    call UpdateWave
     ld a, [wFreeze]
     and a
     jr z, .run
@@ -1007,6 +1049,31 @@ UpdateFlash:
     jr z, .normal
     dec a
     ld [wFlash], a
+    ld b, a
+    ld a, [wFlashKind]
+    and a
+    jr z, .invert
+    dec a
+    jr z, .cycle
+    ld a, b                     ; fade in from white: 16 frames, 4 steps
+    srl a
+    srl a
+    ld hl, PalFadeIn
+    jr .table
+.cycle                          ; level up: 8 frames of palette rotation
+    ld a, b
+    srl a
+    and 3
+    ld hl, PalCycle
+.table
+    add l
+    ld l, a
+    adc h
+    sub l
+    ld h, a
+    ld a, [hl]
+    jr .set
+.invert                         ; death: invert every other frame
     ld a, [wFrame]
     and 2
     ld a, PAL_INVERT
@@ -1015,6 +1082,39 @@ UpdateFlash:
     ld a, PAL_NORMAL
 .set
     ld [wBGP], a
+    ret
+
+PalFadeIn: db PAL_NORMAL, PAL_LIGHT, %01000000, %00000000
+PalCycle:  db PAL_LIGHT, PAL_INVERT, %01001110, PAL_LIGHT
+
+; The wave runs on hit-stop frames: the game logic is idle then, so the
+; per-line interrupt (about a third of a frame) is free.
+UpdateWave:
+    ld a, [wWave]
+    and a
+    ret z
+    dec a
+    ld [wWave], a
+    ldh a, [hWavePhase]
+    add 5
+    ldh [hWavePhase], a
+    ld a, [wWaveAmp]
+    dec a
+    add LOW(WaveTables)
+    ld l, a
+    ld a, 0
+    adc HIGH(WaveTables)
+    ld h, a
+    ld a, [hl]
+    ldh [hWaveHi], a
+    ret
+WaveTables: db HIGH(SineTable), HIGH(SineTable2), HIGH(SineTable3)
+
+; a = amplitude 1..3 (2, 4, 8 px), b = frames
+StartWave:
+    ld [wWaveAmp], a
+    ld a, b
+    ld [wWave], a
     ret
 
 ; ---------------------------------------------------------------
@@ -1079,6 +1179,8 @@ UpdatePlayer:
     ld [wDash], a
     xor a
     ld [wDashKills], a
+    ld a, [wPX + 1]
+    call SetPan
     call SfxDash
 .dashing
     ld a, [wFaceX]
@@ -1433,6 +1535,8 @@ KillEnemy:
     adc 0
     daa
     ld [hl], a
+    ld a, [wCur + E_XH]
+    call SetPan
     ld a, [wCombo]
     call SfxKill
     ld a, [wCombo]
@@ -1458,6 +1562,18 @@ KillEnemy:
     ld [wFreeze], a
     ld a, 6
     call AddShake
+    ld a, [wCombo]              ; wave grows with the chain: x1-3 2 px, x4-6 4 px, x7+ 8 px
+    cp 4
+    ld a, 1
+    jr c, .amp
+    ld a, [wCombo]
+    cp 7
+    ld a, 2
+    jr c, .amp
+    ld a, 3
+.amp
+    ld b, 3
+    call StartWave
     ld hl, wKillsLvl
     inc [hl]
     ld a, [hl]
@@ -1469,10 +1585,19 @@ KillEnemy:
     ret nc
     inc a
     ld [wLevel], a
-    ld a, 4
+    ld a, 8
     ld [wFlash], a
+    ld a, FLASH_CYCLE
+    ld [wFlashKind], a
+    ld a, 6
+    ld [wFreeze], a
+    ld a, 3
+    ld b, 6
+    call StartWave
     ld a, 90
     ld [wBanner], a
+    ld a, 80
+    call SetPan
     jp SfxLevel
 
 PlayerDie:
@@ -1485,6 +1610,13 @@ PlayerDie:
     ld [wShake], a
     ld a, 10
     ld [wFlash], a
+    xor a
+    ld [wFlashKind], a
+    ld a, 3
+    ld b, 24
+    call StartWave
+    ld a, [wPX + 1]
+    call SetPan
     ld a, [wPX + 1]
     add 4
     ld b, a
@@ -2196,7 +2328,6 @@ wOamLo:     db
 wTmp:       db
 wTmp2:      db
 wTmp3:      db
-wWavePhase: db
 wBest:      ds 3
 wPaused:    db
 wCur:       ds EN_SIZE
@@ -2243,7 +2374,13 @@ wOver:      db
 wOverStep:  db
 wNewBest:   db
 wBanner:    db
+wFlashKind: db
+wWave:      db
+wWaveAmp:   db
 wGameVarsEnd:
 
 SECTION "HRAM", HRAM
 hOAMDMA: ds DMARoutineEnd - DMARoutine
+hStatMode: db                   ; 0 = title ripple, 1 = game wave
+hWavePhase: db
+hWaveHi: db                     ; HIGH(wave table) for the current amplitude

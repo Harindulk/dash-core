@@ -167,6 +167,35 @@ pb.tick(150)
 check(bcd(pb, "wBest") == 0, "blank (FF) SRAM -> best 0")
 pb.stop(save=False)
 
+# ---- 7a: impact effects: fade-in, HBlank wave on hit-stop, stereo pan ----
+pb = PyBoy(ROM, window="null", symbols=SYM, sound_emulated=True, ram_file=io.BytesIO(bytes(8192)))
+pb.tick(90); pb.button_press("start"); pb.tick(2); pb.button_release("start"); pb.tick(3)
+check(pb.memory[0xFF47] == 0 and rd(pb, "wFlashKind") == 2, "game starts with a palette fade-in from white")
+pb.tick(30)
+wr(pb, "wSpawnT", 255)
+settle(pb, lambda: clear_enemies(pb))
+put_enemy(pb, 0, 40, 64)
+wr(pb, "wFaceX", 0xFF); wr(pb, "wFaceY", 0); wr(pb, "wDashCD", 0)
+pb.button("a")
+seen = None
+for i in range(40):
+    pb.tick()
+    if rd(pb, "wWave") and seen is None:
+        seen = (rd(pb, "wWaveAmp"), pb.memory[0xFFFF], pb.memory[0xFF25], rd(pb, "wFreeze"))
+check(seen is not None and seen[0] == 1 and seen[1] & 2 and seen[3] > 0,
+      f"kill at x1: 2 px wave during hit-stop, HBlank IRQ enabled (got {seen})")
+check(seen is not None and seen[2] == 0xF6, f"kill on the left pans SFX left (NR51 {seen[2]:02X} if seen else None)")
+check(rd(pb, "wWave") == 0 and pb.memory[0xFFFF] == 1 and pb.memory[0xFF43] == 0, "wave ends: IRQ off, SCX back to 0")
+px, py = rd(pb, "wPX", 1), rd(pb, "wPY", 1)
+settle(pb, lambda: put_enemy(pb, 1, px + 4, py + 4))
+for i in range(30):
+    pb.tick()
+    if rd(pb, "wAlive") == 0:
+        break
+check(rd(pb, "wAlive") == 0 and rd(pb, "wWaveAmp") == 3 and rd(pb, "wWave") >= 20 and rd(pb, "wFlashKind") == 0,
+      "death: 8 px wave for 24 frames with the invert flash")
+pb.stop(save=False)
+
 # ---- 7b: worst-case load still runs at full frame rate ----
 pb = boot()
 start_game(pb)

@@ -209,6 +209,23 @@ NoteFreq:
     ret
 
 ; ---------------- sound effects ----------------
+; a = x position (0..160) -> NR51: SFX channels (1, 4) pan with the event; music (2, 3) stays centred
+SetPan:
+    cp 56
+    jr c, .left
+    cp 104
+    jr nc, .right
+    ld a, $FF
+    jr .set
+.left
+    ld a, %11110110
+    jr .set
+.right
+    ld a, %01101111
+.set
+    ldh [rNR51], a
+    ret
+
 ; CH1 one-shot: a = NR10, then NR11/NR12 from b/c, de = freq
 Ch1Shot:
     ldh [rNR10], a
