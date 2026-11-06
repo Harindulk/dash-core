@@ -1,11 +1,6 @@
-"""Capture page media from a real emulated run: 4 screenshots, a GIF and a <=40 s trailer.
-
-Usage: python tools/capture.py build/dashcore.gb build/media SEED
-Gameplay is played by the same simple bot as tools/bot.py (no cheats, no memory pokes).
-"""
-import io
+"""Capture page media from a real autoplayed run: 4 screenshots, a GIF and a <=39 s trailer
+that opens on the Warden. Usage: python tools/capture.py build/dashcore.gb dist [max_seconds]"""
 import os
-import random
 import subprocess
 import sys
 import wave
@@ -13,125 +8,136 @@ import wave
 import numpy as np
 from pyboy import PyBoy
 
-ROM, OUT, SEED = sys.argv[1], sys.argv[2], int(sys.argv[3])
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from autoplay import decide, apply
+
+ROM, OUT = sys.argv[1], sys.argv[2]
+MAX_S = int(sys.argv[3]) if len(sys.argv) > 3 else 150
 os.makedirs(OUT, exist_ok=True)
-rng = random.Random(SEED)
-RATE = 32768
-SCALE = 4
-pb = PyBoy(ROM, window="null", symbols=ROM[:-3] + ".sym", ram_file=io.BytesIO(bytes(8192)),
+RATE, SCALE, FPS = 32768, 4, 59.7275
+pb = PyBoy(ROM, window="null", symbols=ROM[:-3] + ".sym", ram_file=__import__("io").BytesIO(bytes(8192)),
            sound_emulated=True, sound_sample_rate=RATE)
 A = lambda n: pb.symbol_lookup(n)[1]
 M = pb.memory
 frames, audio = [], []
-shots = {}
+ev = {}                                   # event name -> frame index (first occurrence)
+score_at = []                             # score per recorded frame
 
 
-def step(n=1, rec=True):
-    for _ in range(n):
-        pb.tick()
-        if rec:
-            frames.append(pb.screen.image.convert("RGB"))
-            audio.append(pb.sound.ndarray.copy())
+def score():
+    return int(f"{M[A('wScore')+2]:02X}{M[A('wScore')+1]:02X}{M[A('wScore')]:02X}")
 
 
-def big(img):
-    return img.resize((160 * SCALE, 144 * SCALE), 0)
+def step(rec=True):
+    pb.tick()
+    if rec:
+        frames.append(pb.screen.image.convert("RGB"))
+        audio.append(pb.sound.ndarray.copy())
+        score_at.append(score())
 
 
-def bot_input(held):
-    px, py = M[A("wPX") + 1] + 8, M[A("wPY") + 1] + 8
-    best = None
-    for i in range(12):
-        b = A("wEnemies") + i * 16
-        if M[b] in (1, 2):
-            sv = lambda lo, hi: (lo | hi << 8) - (65536 if hi & 0x80 else 0)
-            vx, vy = sv(M[b + 6], M[b + 7]) / 256, sv(M[b + 8], M[b + 9]) / 256
-            ex, ey = M[b + 3] + 4 + vx * 8, M[b + 5] + 4 + vy * 8
-            d = abs(ex - px) + abs(ey - py)
-            if best is None or d < best[0]:
-                best = (d, int(ex - px), int(ey - py))
-    want = set()
-    ready = M[A("wDashCD")] == 0 and M[A("wDash")] == 0
-    if best:
-        d, dx, dy = best
-        H = "right" if dx > 0 else "left"
-        V = "down" if dy > 0 else "up"
-        if ready:
-            if abs(dx) <= abs(dy):
-                want = {H} if abs(dx) > 4 else {V}
-                if abs(dx) <= 4 and abs(dy) < 52 and rng.random() < 0.5:
-                    pb.button("a")
-            else:
-                want = {V} if abs(dy) > 4 else {H}
-                if abs(dy) <= 4 and abs(dx) < 52 and rng.random() < 0.5:
-                    pb.button("a")
-        elif d < 24:
-            want = {"left" if dx > 0 else "right", "up" if dy > 0 else "down"}
-    for k in held - want:
-        pb.button_release(k)
-    for k in want - held:
-        pb.button_press(k)
-    return want
+def mark(name):
+    ev.setdefault(name, len(frames) - 1)
 
 
-# boot (not recorded), then title
-step(110, rec=False)
-step(150)
-# title frame with PRESS START visible (row 9 has dark pixels)
-shots["1_title"] = next(f for f in reversed(frames) if np.array(f)[72:80, 32:120].min() < 100)
-pb.button("start")
-step(10)
-
-# gameplay: bot for up to ~26 s
-held = set()
-chain, level = [], []
-for f in range(26 * 60):
-    held = bot_input(held)
+for _ in range(110):
+    step(rec=False)
+for _ in range(150):
     step()
-    if not M[A("wAlive")]:
+title_end = len(frames)
+pb.button("start")
+step()
+held = set()
+prev = dict(boss=0, nodes=7, alive=1, over=0, combo=1)
+for f in range(MAX_S * 60):
+    held = apply(pb, held, decide(pb, A, M))
+    step()
+    boss, nodes, alive, over = M[A("wBoss")], M[A("wBossNodes")], M[A("wAlive")], M[A("wOver")]
+    if boss == 1 and prev["boss"] == 0: mark("boss_enter")
+    if boss == 2 and nodes < prev["nodes"] and "boss_enter" in ev:
+        mark("break1"); ev["break_last"] = len(frames) - 1
+    if boss == 3 and prev["boss"] == 2: mark("boss_down")
+    if not alive and prev["alive"]: mark("death")
+    if over and not prev["over"]: mark("gameover")
+    if M[A("wDash")] and M[A("wCombo")] >= 5 and "boss_enter" not in ev: mark("chain")
+    prev = dict(boss=boss, nodes=nodes, alive=alive, over=over)
+    if "boss_down" in ev and len(frames) - ev["boss_down"] > 60 * 9 and ("gameover" in ev or f > 100 * 60):
         break
-    live = sum(1 for i in range(12) if M[A("wEnemies") + i * 16] in (1, 2, 3))
-    parts = sum(1 for i in range(12) if M[A("wParts") + i * 6])
-    if M[A("wDash")] and parts >= 4 and live >= 3:
-        chain.append(frames[-1])
-    hud = np.array(frames[-1])[137:143]
-    if hud[:, 0:20].min() > 200 and hud[:, 24:40].min() < 100:   # banner on screen
-        level.append(frames[-1])
 for k in list(held):
     pb.button_release(k)
-# hands off: let the arena finish the run
-while M[A("wAlive")]:
-    step()
-step(220)
-shots["4_gameover"] = frames[-1]
 pb.stop(save=False)
-if chain: shots["2_chain"] = chain[len(chain) // 2]
-if level: shots["3_level"] = level[len(level) // 3]
+n = len(frames)
+print("recorded", n, "frames; events", {k: v for k, v in sorted(ev.items(), key=lambda kv: kv[1])})
 
-print("frames", len(frames), "shots", sorted(shots))
+
+def seg(a, b):
+    return max(title_end, a), min(n, b)
+
+
+def best_window(a, b, w):
+    """start of the w-frame window in [a, b) with the largest score gain"""
+    best, bs = a, -1
+    for s in range(a, max(a + 1, b - w), 30):
+        g = score_at[min(s + w, n - 1)] - score_at[s]
+        if g > bs:
+            best, bs = s, g
+    return best
+
+
+parts = []
+if "break1" in ev:
+    parts.append(seg(ev["break1"] - 100, ev["break1"] + 50))        # cold open: a node shatters
+parts.append((0, 90))                                                # title
+play0 = title_end + 30
+play_end = ev.get("boss_enter", n)
+w = best_window(play0, play_end, 600)
+parts.append(seg(w, w + 600))                                        # best 10 s of chaining
+if "boss_enter" in ev:
+    parts.append(seg(ev["boss_enter"] - 30, ev["boss_enter"] + 270))  # WARDEN arrives
+if "boss_down" in ev:
+    parts.append(seg(ev["boss_down"] - 270, ev["boss_down"] + 150))   # last nodes and the kill
+    w2 = best_window(ev["boss_down"] + 150, n, 300)
+    parts.append(seg(w2, w2 + 300))                                   # carnage after
+if "gameover" in ev:
+    parts.append(seg(ev["gameover"] + 60, ev["gameover"] + 150))
+total = sum(b - a for a, b in parts)
+limit = int(38.5 * 60)
+if total > limit:                                                    # trim the chaining window first
+    parts[2] = (parts[2][0], parts[2][1] - (total - limit))
+print("trailer parts", parts, "frames", sum(b - a for a, b in parts))
+
+shots = {}
+shots["1_title"] = next(f for f in reversed(frames[:title_end]) if np.array(f)[72:80, 32:120].min() < 100)
+if "chain" in ev: shots["2_chain"] = frames[ev["chain"] + 2]
+if "break1" in ev: shots["3_warden"] = frames[ev["break1"] + 3]
+elif "boss_enter" in ev: shots["3_warden"] = frames[ev["boss_enter"] + 120]
+if "gameover" in ev: shots["4_gameover"] = frames[min(n - 1, ev["gameover"] + 120)]
+elif "boss_down" in ev: shots["4_wardendown"] = frames[ev["boss_down"] + 40]
 for name, img in shots.items():
-    big(img).save(os.path.join(OUT, name + ".png"))
+    img.resize((160 * SCALE, 144 * SCALE), 0).save(os.path.join(OUT, name + ".png"))
+print("shots", sorted(shots))
 
-# GIF: gameplay only, every 2nd frame, 2x
-g = [f.resize((320, 288), 0) for f in frames[150:150 + 20 * 60:2]]
+g0 = ev.get("boss_enter", title_end + 60) - 60
+g = [f.resize((320, 288), 0) for f in frames[g0:g0 + 12 * 60:2]]
 g[0].save(os.path.join(OUT, "gameplay.gif"), save_all=True, append_images=g[1:], duration=33, loop=0)
 
-# trailer: raw frames + audio -> mp4 (nearest-neighbour 4x), cut to 39 s
-pcm = np.concatenate(audio).astype(np.int16)
-if pcm.dtype != np.int16 or np.abs(pcm).max() < 256:
-    pcm = (pcm * 200).clip(-32768, 32767).astype(np.int16)   # PyBoy gives small signed samples
+sel = [i for a, b in parts for i in range(a, b)]
+pcm = np.concatenate([audio[i] for i in sel]).astype(np.int16)
+if np.abs(pcm).max() < 256:
+    pcm = (pcm * 200).clip(-32768, 32767).astype(np.int16)
 wav = os.path.join(OUT, "trailer.wav")
-with wave.open(wav, "wb") as w:
-    w.setnchannels(2); w.setsampwidth(2); w.setframerate(RATE); w.writeframes(pcm.tobytes())
+with wave.open(wav, "wb") as wf:
+    wf.setnchannels(2); wf.setsampwidth(2); wf.setframerate(RATE); wf.writeframes(pcm.tobytes())
+secs = len(sel) / FPS
 mp4 = os.path.join(OUT, "trailer.mp4")
 cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "160x144",
-       "-framerate", "59.7275", "-i", "-", "-i", wav,
-       "-vf", f"scale={160*SCALE}:{144*SCALE}:flags=neighbor,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x1a1a1a,fade=t=out:st=37.5:d=1.5",
-       "-af", "highpass=f=20,volume=8dB,afade=t=out:st=37.5:d=1.5",
-       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "16", "-c:a", "aac", "-b:a", "160k", "-t", "39", "-shortest", mp4]
+       "-framerate", str(FPS), "-i", "-", "-i", wav,
+       "-vf", f"scale={160*SCALE}:{144*SCALE}:flags=neighbor,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x1a1a1a,fade=t=out:st={secs-1.2:.2f}:d=1.2",
+       "-af", f"highpass=f=20,volume=8dB,afade=t=out:st={secs-1.2:.2f}:d=1.2",
+       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "16", "-c:a", "aac", "-b:a", "160k", "-shortest", mp4]
 p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-for f in frames:
-    p.stdin.write(f.tobytes())
-p.stdin.close()
-p.wait()
-print("trailer", mp4, "exit", p.returncode)
+for i in sel:
+    p.stdin.write(frames[i].tobytes())
+p.stdin.close(); p.wait()
+os.remove(wav)
+print("trailer", mp4, f"{secs:.1f}s", "exit", p.returncode)

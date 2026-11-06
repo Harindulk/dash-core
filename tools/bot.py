@@ -33,49 +33,21 @@ step(100)
 pb.button("start")
 step(40)
 held = set()
-deaths, best_t, t_alive = 0, 0, 0
-maxs = 0
+deaths, maxs, maxlvl, bossdown = 0, 0, 0, 0
+import os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from autoplay import decide, apply
 for f in range(FRAMES):
-    if M[A("wOver")]:
-        if M[A("wWY")] == 56 and rng.random() < 0.05:
-            pb.button("start")
-            deaths += 1
-        step()
-        continue
-    px, py = M[A("wPX") + 1] + 8, M[A("wPY") + 1] + 8
-    best = None
-    for i in range(12):
-        b = A("wEnemies") + i * 16
-        if M[b] in (1, 2):
-            sv = lambda lo, hi: (lo | hi << 8) - (65536 if hi & 0x80 else 0)
-            vx, vy = sv(M[b + 6], M[b + 7]) / 256, sv(M[b + 8], M[b + 9]) / 256
-            ex, ey = M[b + 3] + 4 + vx * 8, M[b + 5] + 4 + vy * 8
-            d = abs(ex - px) + abs(ey - py)
-            if best is None or d < best[0]:
-                best = (d, int(ex - px), int(ey - py))
-    want = set()
-    ready = M[A("wDashCD")] == 0 and M[A("wDash")] == 0
-    if best:
-        d, dx, dy = best
-        H = "right" if dx > 0 else "left"
-        V = "down" if dy > 0 else "up"
-        if ready:
-            if abs(dx) <= abs(dy):          # line up horizontally, then dash vertically
-                want = {H} if abs(dx) > 4 else {V}
-                if abs(dx) <= 4 and abs(dy) < 52 and rng.random() < 0.5: pb.button("a")
-            else:
-                want = {V} if abs(dy) > 4 else {H}
-                if abs(dy) <= 4 and abs(dx) < 52 and rng.random() < 0.5: pb.button("a")
-        elif d < 24:                        # cooling down: back off
-            want = {"left" if dx > 0 else "right", "up" if dy > 0 else "down"}
-    for k in held - want: pb.button_release(k)
-    for k in want - held: pb.button_press(k)
-    held = want
+    was_over = M[A("wOver")]
+    held = apply(pb, held, decide(pb, A, M))
     step()
+    if was_over and not M[A("wOver")]:
+        deaths += 1
+    if M[A("wBoss")] == 3: bossdown = 1
+    maxlvl = max(maxlvl, M[A("wLevel")])
     maxs = max(maxs, int(f"{M[A('wScore')+2]:02X}{M[A('wScore')+1]:02X}{M[A('wScore')]:02X}"))
 
 scores = M[A("wScore")+2], M[A("wScore")+1], M[A("wScore")]
-print("deaths", deaths, "maxscore", maxs, "score", "".join(f"{x:02X}" for x in scores), "level", M[A("wLevel")])
+print("deaths", deaths, "maxscore", maxs, "maxlevel", maxlvl, "bossdown", bossdown)
 frames[0].save(OUT + ".gif", save_all=True, append_images=frames[1::2], duration=33, loop=0)
 pcm = np.concatenate(audio)
 print("audio samples", pcm.shape, "peak", int(np.abs(pcm).max()), "rms", float(np.sqrt((pcm.astype(float) ** 2).mean())))
