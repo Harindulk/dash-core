@@ -119,7 +119,7 @@ DEF GRACE       EQU 6
 DEF CHASE_ACC   EQU $0007
 DEF SPAWN_TIME  EQU 40
 DEF HURT_R      EQU 8
-DEF KILL_R      EQU 13
+DEF KILL_R      EQU 16
 DEF PANEL_WY    EQU 56
 
 DEF PAD_A     EQU 0
@@ -1434,11 +1434,12 @@ KillEnemy:
     ld [wFreeze], a
     ld a, 6
     call AddShake
-    ld hl, wKills
+    ld hl, wKillsLvl
     inc [hl]
     ld a, [hl]
-    and 7
-    ret nz
+    cp 6
+    ret c
+    ld [hl], 0
     ld a, [wLevel]
     cp 9
     ret nc
@@ -1480,10 +1481,10 @@ UpdateSpawner:
     add a
     add b
     ld b, a
-    ld a, 64
+    ld a, 54
     sub b
-    ld [hl], a
-    ; cap = 3 + level
+    ld [hl], a                  ; 54 .. 9 frames between spawns
+    ; cap = 4 + level
     ld hl, wEnemies
     ld b, MAX_EN
     ld c, 0
@@ -1497,7 +1498,11 @@ UpdateSpawner:
     dec b
     jr nz, .cnt
     ld a, [wLevel]
-    add 3
+    add 4
+    cp MAX_EN + 1
+    jr c, .capOk
+    ld a, MAX_EN
+.capOk
     cp c
     ret c
     ret z
@@ -2182,7 +2187,7 @@ wEnemies:   ds MAX_EN * EN_SIZE
 wParts:     ds MAX_PART * PART_SIZE
 wScore:     ds 3
 wCombo:     db
-wKills:     db
+wKillsLvl:  db
 wLevel:     db
 wSpawnT:    db
 wFreeze:    db
