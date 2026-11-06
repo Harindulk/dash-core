@@ -94,8 +94,11 @@ def start_game(pb):
 
 # ---- 1: boot, title, start ----
 pb = boot()
+pb.tick(120)                 # past the opening banner, on the title
+check(pb.memory[0xFFFF] & 2, "title: STAT (HBlank ripple) interrupt stays enabled")
 start_game(pb)
 check(rd(pb, "wAlive") == 1, "game starts, player alive")
+check(pb.memory[0xFFFF] & 2 == 0, "game: STAT interrupt off while no wave runs")
 check(rd(pb, "wPX", 1) == 72, "player spawned at centre")
 
 # ---- 1b: SELECT on the title switches the language ----

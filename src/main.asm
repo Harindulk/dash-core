@@ -192,12 +192,10 @@ SECTION "Main", ROM0
 Start:
     di
     ld sp, $E000
-    ; wait for VBlank, then LCD off (only legal in VBlank on DMG)
-.wv ldh a, [rLY]
-    cp 144
-    jr c, .wv
-    xor a
-    ldh [rLCDC], a
+    ; LCD off (only legal in VBlank on DMG). LcdOff checks LCDC.7 first:
+    ; LY reads 0 while the LCD is off, so a flash-cart menu that hands
+    ; over with the screen off would hang a plain LY wait forever.
+    call LcdOff
     ; clear WRAM inline (the stack lives there)
     ld hl, $C000
     ld bc, $2000
@@ -304,12 +302,21 @@ VBlankHandler:
     ld [wCopyLen], a
 .noCopy
     call MusicTick
-    ld a, [wWave]               ; HBlank wave only while a wave runs
+    ldh a, [hStatMode]          ; title: the logo ripple is always on
+    and a
+    ld a, %00000011
+    jr z, .ie
+    ld a, [wWave]               ; game: HBlank wave only while a wave runs
     and a
     ld a, %00000001
     jr z, .ie
     ld a, %00000011
 .ie
+    ld b, a
+    ldh a, [rIF]                ; drop the STAT flag the last HBlank left
+    and %11111101               ; pending, or the handler fires once in VBlank
+    ldh [rIF], a
+    ld a, b
     ldh [rIE], a
     ld a, 1
     ld [wVBlankDone], a
